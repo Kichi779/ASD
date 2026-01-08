@@ -1,12 +1,5 @@
 # ios/Podfile
-
-# 1. podhelper.rb yolunu tanımla
-podhelper_path = File.join(File.dirname(File.realpath(__FILE__)), 'Flutter', 'podhelper.rb')
-
-# 2. Eğer dosya varsa yükle
-if File.exist?(podhelper_path)
-  load podhelper_path
-end
+load File.join(File.dirname(File.realpath(__FILE__)), 'Flutter', 'podhelper.rb')
 
 platform :ios, '14.0'
 
@@ -14,22 +7,12 @@ target 'Runner' do
   use_frameworks!
   use_modular_headers!
 
-  # 3. Metod varsa çalıştır, yoksa sessizce geç (config-only için kritik)
-  if defined?(flutter_install_all_ios_pods)
-    flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
-  else
-    # CocoaPods boş Podfile hatası vermesin diye geçici bir bağımlılık ekliyoruz
-    pod 'Firebase/Core' if File.exist?('GoogleService-Info.plist')
-  end
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
-    # 4. Hata veren metodun kontrolünü buraya ekledik
-    if defined?(flutter_additional_ios_build_settings)
-      flutter_additional_ios_build_settings(target)
-    end
-    
+    flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
       config.build_settings['ENABLE_BITCODE'] = 'NO'
