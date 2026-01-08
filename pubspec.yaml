@@ -2,7 +2,7 @@ name: uluslararasialevivakfi
 description: "Uluslararası Alevi Vakfı mobil uygulaması"
 publish_to: 'none'
 
-version: 1.0.0+4
+version: 1.0.0+5
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -14,7 +14,7 @@ dependencies:
 
   # Sürümleri en güncel ve stabil hallerine çektik
   webview_flutter: ^4.9.0
-  shared_preferences: ^2.3.5 # Crash riskine karşı güncel tutuyoruz
+  shared_preferences: 2.3.2 # Crash riskine karşı güncel tutuyoruz
   url_launcher: ^6.3.1
 
 dev_dependencies:
