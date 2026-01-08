@@ -2,7 +2,7 @@ name: uluslararasialevivakfi
 description: "Uluslararası Alevi Vakfı mobil uygulaması"
 publish_to: 'none'
 
-version: 1.0.0+5
+version: 1.0.0+6
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -12,20 +12,21 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
 
-  # Sürümleri en güncel ve stabil hallerine çektik
+  # Hive: Saf Dart olduğu için iOS tarafında çökme yapmaz
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
   webview_flutter: ^4.9.0
-  shared_preferences: 2.3.2 # Crash riskine karşı güncel tutuyoruz
   url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0 # Proje SDK'nıza daha uygun sürüm
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
 
-  # Assets hizalaması çok önemlidir, boşluklara dikkat!
   assets:
     - assets/
     - assets/app_logo.png

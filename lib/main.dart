@@ -1,12 +1,19 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_flutter/hive_flutter.dart'; // Hive eklendi
 import 'package:url_launcher/url_launcher.dart';
 
-void main() {
-  // CRASH ENGELLEME 1: Native bağlayıcıların hazır olduğundan emin oluyoruz.
+void main() async {
+  // CRASH ENGELLEME: Native bağlayıcılar ve veritabanı başlatılıyor
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await Hive.initFlutter(); // Hive kurulumu
+    await Hive.openBox('settings'); // Ayarlar kutusunu aç
+  } catch (e) {
+    log("HIVE INITIALIZATION ERROR: $e");
+  }
 
   FlutterError.onError = (FlutterErrorDetails details) {
     log('FLUTTER ERROR', error: details.exception, stackTrace: details.stack);
@@ -20,11 +27,10 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       title: 'Uluslararası Alevi Vakfı',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true),
-      home: const WebViewPage(),
+      home: WebViewPage(),
     );
   }
 }
@@ -42,6 +48,8 @@ class _WebViewPageState extends State<WebViewPage> {
   bool showSocialButtons = true;
   bool isLoading = true;
 
+  // Hive kutusuna erişim
+  final Box settingsBox = Hive.box('settings');
   static const String homeUrl = "https://www.alevi-vakfi.com/";
 
   @override
@@ -50,10 +58,9 @@ class _WebViewPageState extends State<WebViewPage> {
     _initApp();
   }
 
-  // CRASH ENGELLEME 2: Başlatma işlemlerini tek bir güvenli fonksiyonda topladık.
   Future<void> _initApp() async {
-    await _loadTheme();
-    _setupController();
+    _loadTheme(); // Kayıtlı temayı yükle
+    _setupController(); // WebView'ı hazırla
   }
 
   void _setupController() {
@@ -78,33 +85,22 @@ class _WebViewPageState extends State<WebViewPage> {
       ..loadRequest(Uri.parse(homeUrl));
   }
 
-  Future<void> _loadTheme() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (mounted) {
-        setState(() {
-          isDarkTheme = prefs.getBool('isDarkTheme') ?? false;
-        });
-      }
-    } catch (e) {
-      log("PREFS LOAD ERROR: $e");
-      // Eğer prefs hata verirse uygulama çökmez, varsayılan (false) ile devam eder.
-    }
+  void _loadTheme() {
+    // Hive üzerinden temayı oku
+    setState(() {
+      isDarkTheme = settingsBox.get('isDarkTheme', defaultValue: false);
+    });
   }
 
-  Future<void> _toggleTheme() async {
-    try {
-      setState(() => isDarkTheme = !isDarkTheme);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('isDarkTheme', isDarkTheme);
-      _injectTheme();
-    } catch (e) {
-      log("PREFS SAVE ERROR: $e");
-    }
+  void _toggleTheme() {
+    setState(() {
+      isDarkTheme = !isDarkTheme;
+      settingsBox.put('isDarkTheme', isDarkTheme); // Hive'a kaydet
+    });
+    _injectTheme();
   }
 
   void _injectTheme() {
-    // Controller henüz hazır değilse işlem yapma (Crash engelleme)
     final String js = isDarkTheme
         ? """
         (function() {
@@ -115,7 +111,6 @@ class _WebViewPageState extends State<WebViewPage> {
             body { background:#121212 !important; color:#fff !important; }
             * { color:#fff !important; background:#121212 !important; }
             a { color:#bb86fc !important; }
-            input,textarea,select { background:#333 !important; color:#fff !important; }
           `;
           document.head.appendChild(s);
         })();
@@ -126,7 +121,6 @@ class _WebViewPageState extends State<WebViewPage> {
           if (s) s.remove();
         })();
         """;
-
     controller.runJavaScript(js).catchError((e) => log("JS Inject Error: $e"));
   }
 
@@ -135,11 +129,7 @@ class _WebViewPageState extends State<WebViewPage> {
       final currentUrl = await controller.currentUrl();
       if (!mounted) return;
       setState(() {
-        if (currentUrl == null) {
-          showSocialButtons = false;
-        } else {
-          showSocialButtons = currentUrl == homeUrl || currentUrl.startsWith(homeUrl);
-        }
+        showSocialButtons = currentUrl == null || currentUrl == homeUrl || currentUrl.startsWith(homeUrl);
       });
     } catch (e) {
       log("URL Check Error: $e");
@@ -160,24 +150,12 @@ class _WebViewPageState extends State<WebViewPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea( // iOS çentiği için SafeArea ekledik
+      body: SafeArea(
         child: Stack(
           children: [
             WebViewWidget(controller: controller),
             if (isLoading)
-              const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(color: Colors.purple),
-                    SizedBox(height: 20),
-                    Text(
-                      "Yükleniyor...",
-                      style: TextStyle(color: Colors.purple, fontSize: 16),
-                    ),
-                  ],
-                ),
-              ),
+              const Center(child: CircularProgressIndicator(color: Colors.purple)),
           ],
         ),
       ),
@@ -185,7 +163,7 @@ class _WebViewPageState extends State<WebViewPage> {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           FloatingActionButton(
-            heroTag: "theme_btn", // Hero tag hatalarını önlemek için
+            heroTag: "theme_btn",
             mini: true,
             backgroundColor: Colors.white.withOpacity(0.8),
             child: Icon(isDarkTheme ? Icons.light_mode : Icons.dark_mode),
@@ -254,7 +232,10 @@ class _SocialButton extends StatelessWidget {
             : Text(
           label ?? '',
           style: const TextStyle(
-              color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold
+          ),
         ),
       ),
     );
