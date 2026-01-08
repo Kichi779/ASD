@@ -15,27 +15,28 @@ workflows:
           flutter pub get
       - name: iOS Yapilandirma Dosyalarini Olustur (Hileli Adim)
         script: |
-          # 1. Podfile'ı geçici olarak gizle ki Flutter hata vermesin
+          # Podfile'ı gizleyip podhelper.rb dosyasını sunucuda oluşturur
           mv ios/Podfile ios/Podfile.bak || true
-          # 2. podhelper.rb dosyasını sunucuda oluştur
           flutter build ios --config-only --no-codesign
-          # 3. Podfile'ı geri getir
           mv ios/Podfile.bak ios/Podfile || true
       - name: CocoaPods Kurulumu (Gerçek Kurulum)
         script: |
           cd ios
           rm -rf Podfile.lock Pods
           pod deintegrate
-          # Artık podhelper.rb yerinde olduğu için tüm eklentiler kurulacak
           pod install --repo-update
           cd ..
-      - name: iOS IPA Build (Paketleme)
+      - name: Apple Sertifikalarini Zorla Yapilandir
         script: |
-          # Sertifikaları yükle ve IPA'yı oluştur
-          xcode-project use-profiles
+          # HATANIN ÇÖZÜMÜ: Bundle ID ve export metodunu açıkça belirtiyoruz
+          xcode-project use-profiles --bundle-id com.alevivakfi.uade --export-method app-store
+      - name: IPA Paketleme ve Imzalama
+        script: |
+          # IPA'yı belirtilen Bundle ID ile paketliyoruz
           xcode-project build-ipa \
             --workspace ios/Runner.xcworkspace \
-            --scheme Runner
+            --scheme Runner \
+            --bundle-id com.alevivakfi.uade
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
