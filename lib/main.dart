@@ -1,13 +1,27 @@
-// lib/main.dart – 17 Kasım 2025 için %100 çalışan son hali
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-void main() => runApp(const MyApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+  };
+
+  runZonedGuarded(() {
+    runApp(const MyApp());
+  }, (error, stack) {
+    debugPrint('CRASH: $error');
+    debugPrintStack(stackTrace: stack);
+  });
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
@@ -20,32 +34,43 @@ class MyApp extends StatelessWidget {
 
 class WebViewPage extends StatefulWidget {
   const WebViewPage({super.key});
+
   @override
   State<WebViewPage> createState() => _WebViewPageState();
 }
 
 class _WebViewPageState extends State<WebViewPage> {
-  late final WebViewController controller;
-  bool isDarkTheme = false;
-  bool showSocialButtons = true;
-  bool isLoading = true;
+  late final WebViewController _controller;
 
-  static const String homeUrl = "https://www.alevi-vakfi.com/";
+  bool isDarkTheme = false;
+  bool isLoading = true;
+  bool showSocialButtons = true;
+
+  static const String homeUrl = 'https://www.alevi-vakfi.com/';
 
   @override
   void initState() {
     super.initState();
     _loadTheme();
+    _initWebView();
+  }
 
-    controller = WebViewController()
+  void _initWebView() {
+    _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageStarted: (_) => setState(() => isLoading = true),
+          onPageStarted: (_) {
+            if (mounted) setState(() => isLoading = true);
+          },
           onPageFinished: (_) async {
+            if (!mounted) return;
             setState(() => isLoading = false);
-            _injectTheme();
+            await _injectTheme();
             await _checkCurrentUrl();
+          },
+          onWebResourceError: (error) {
+            debugPrint('WebView error: ${error.description}');
           },
         ),
       )
@@ -54,46 +79,62 @@ class _WebViewPageState extends State<WebViewPage> {
 
   Future<void> _loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       isDarkTheme = prefs.getBool('isDarkTheme') ?? false;
     });
   }
 
   Future<void> _toggleTheme() async {
-    setState(() => isDarkTheme = !isDarkTheme);
     final prefs = await SharedPreferences.getInstance();
+    isDarkTheme = !isDarkTheme;
     await prefs.setBool('isDarkTheme', isDarkTheme);
-    _injectTheme();
+    if (mounted) setState(() {});
+    await _injectTheme();
   }
 
-  void _injectTheme() {
-    final String js = isDarkTheme
-        ? """
-          (function() {
-            if (document.getElementById('dark-style')) return;
-            var s = document.createElement('style');
-            s.id = 'dark-style';
-            s.textContent = 'body{background:#121212 !important;color:#fff !important;}*{color:#fff !important;background:#121212 !important;}a{color:#bb86fc !important;}input,textarea,select{background:#333 !important;color:#fff !important;}';
-            document.head.appendChild(s);
-          })();
+  Future<void> _injectTheme() async {
+    try {
+      final js = isDarkTheme
+          ? """
+            (function() {
+              if (document.getElementById('dark-style')) return;
+              var s = document.createElement('style');
+              s.id = 'dark-style';
+              s.innerHTML = `
+                body { background:#121212 !important; color:#fff !important; }
+                * { background:#121212 !important; color:#fff !important; }
+                a { color:#bb86fc !important; }
+                input, textarea, select { background:#333 !important; color:#fff !important; }
+              `;
+              document.head.appendChild(s);
+            })();
           """
-        : """
-          (function() {
-            var s = document.getElementById('dark-style');
-            if (s) s.remove();
-          })();
+          : """
+            (function() {
+              var s = document.getElementById('dark-style');
+              if (s) s.remove();
+            })();
           """;
-    controller.runJavaScript(js);
+
+      await _controller.runJavaScript(js);
+    } catch (e) {
+      debugPrint('JS inject error: $e');
+    }
   }
 
   Future<void> _checkCurrentUrl() async {
-    final currentUrl = await controller.currentUrl();
-    setState(() {
-      showSocialButtons = currentUrl == homeUrl || currentUrl!.startsWith(homeUrl);
-    });
+    try {
+      final url = await _controller.currentUrl();
+      if (!mounted || url == null) return;
+
+      setState(() {
+        showSocialButtons = url.startsWith(homeUrl);
+      });
+    } catch (_) {}
   }
 
-  void _openUrl(String url) async {
+  static Future<void> _openExternalUrl(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -105,15 +146,18 @@ class _WebViewPageState extends State<WebViewPage> {
     return Scaffold(
       body: Stack(
         children: [
-          WebViewWidget(controller: controller),
+          WebViewWidget(controller: _controller),
           if (isLoading)
             const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   CircularProgressIndicator(color: Colors.purple),
-                  SizedBox(height: 20),
-                  Text("Yükleniyor...", style: TextStyle(color: Colors.purple, fontSize: 16)),
+                  SizedBox(height: 16),
+                  Text(
+                    'Yükleniyor...',
+                    style: TextStyle(color: Colors.purple, fontSize: 16),
+                  ),
                 ],
               ),
             ),
@@ -122,36 +166,33 @@ class _WebViewPageState extends State<WebViewPage> {
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // Tema değiştirme
           FloatingActionButton(
             mini: true,
-            backgroundColor: Colors.white.withOpacity(0.8),
-            child: Icon(isDarkTheme ? Icons.light_mode : Icons.dark_mode),
+            backgroundColor: Colors.white.withOpacity(0.85),
             onPressed: _toggleTheme,
+            child: Icon(isDarkTheme ? Icons.light_mode : Icons.dark_mode),
           ),
           const SizedBox(height: 16),
-
-          // Sosyal medya butonları
           if (showSocialButtons) ...[
-            const _SocialButton(
-              color: Color(0xFF1877F2),
+            _SocialButton(
+              color: const Color(0xFF1877F2),
               icon: Icons.facebook,
-              url: "https://www.facebook.com/alevivakfi",
+              url: 'https://www.facebook.com/alevivakfi',
             ),
-            const _SocialButton(
-              color: Color(0xFFE4405F),
-              icon: Icons.camera_alt, // Instagram ikonu
-              url: "https://www.instagram.com/alevitischestiftung/",
+            _SocialButton(
+              color: const Color(0xFFE4405F),
+              icon: Icons.camera_alt,
+              url: 'https://www.instagram.com/alevitischestiftung/',
             ),
-            const _SocialButton(
+            _SocialButton(
               color: Colors.red,
               icon: Icons.play_arrow,
-              url: "https://www.youtube.com/@uadevakfi/videos",
+              url: 'https://www.youtube.com/@uadevakfi/videos',
             ),
-            const _SocialButton(
+            _SocialButton(
               color: Colors.black,
-              iconData: "X",
-              url: "https://x.com/UADEVAKFI",
+              label: 'X',
+              url: 'https://x.com/UADEVAKFI',
             ),
             const SizedBox(height: 80),
           ],
@@ -161,18 +202,17 @@ class _WebViewPageState extends State<WebViewPage> {
   }
 }
 
-// Instagram ve X ikonları için küçük yardımcı widget
 class _SocialButton extends StatelessWidget {
   final Color color;
   final IconData? icon;
-  final String? iconData;
+  final String? label;
   final String url;
 
   const _SocialButton({
     required this.color,
-    this.icon,
-    this.iconData,
     required this.url,
+    this.icon,
+    this.label,
   });
 
   @override
@@ -182,18 +222,11 @@ class _SocialButton extends StatelessWidget {
       child: FloatingActionButton(
         mini: true,
         backgroundColor: color,
+        onPressed: () => _WebViewPageState._openExternalUrl(url),
         child: icon != null
             ? Icon(icon, color: Colors.white)
-            : Text(iconData!, style: const TextStyle(color: Colors.white, fontSize: 24)),
-        onPressed: () => (_SocialButton as dynamic)._openUrl(url),
+            : Text(label ?? '', style: const TextStyle(color: Colors.white, fontSize: 20)),
       ),
     );
-  }
-
-  static void _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 }
