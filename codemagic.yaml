@@ -3,6 +3,9 @@ workflows:
     name: Uluslararasi Alevi Vakfi iOS Build
     instance_type: mac_mini_m1
     max_build_duration: 60
+    # HATANIN ÇÖZÜMÜ: Entegrasyonu buraya tanımladık
+    integrations:
+      app_store_connect: alevi-vakfi 
     environment:
       flutter: stable
       xcode: latest
@@ -13,18 +16,18 @@ workflows:
           flutter pub get
       - name: iOS Yapilandirma Dosyalarini Olustur (Kritik Adim)
         script: |
-          # Bu komut, sunucuda hata veren 'podhelper.rb' dosyasini yoktan var eder
+          # Windows'ta oluşmayan dosyaları sunucuda yoktan var eder
           flutter build ios --config-only
       - name: CocoaPods Kurulumu (Temiz Build)
         script: |
           cd ios
-          # Windows'tan gelen hatali dosyalari temizliyoruz
+          # Hatalı bağlantıları temizleyip modern Swift ayarlarını kurar
           rm -rf Podfile.lock Pods
           pod install --repo-update
           cd ..
       - name: iOS IPA Build
         script: |
-          # Uygulamayi release modunda derleyip çökme riskini bitiriyoruz
+          # Release modunda derleme yaparak performansı artırıp crash riskini bitirir
           flutter build ipa --release --export-options-plist /Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
