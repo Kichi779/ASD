@@ -3,7 +3,7 @@ workflows:
     name: Uluslararasi Alevi Vakfi iOS Build
     instance_type: mac_mini_m1
     max_build_duration: 60
-    # HATANIN ÇÖZÜMÜ: Entegrasyonu buraya tanımladık
+    # App Store Connect entegrasyonunu buraya bağladık (Validasyon hatasını çözer)
     integrations:
       app_store_connect: alevi-vakfi 
     environment:
@@ -13,21 +13,23 @@ workflows:
     scripts:
       - name: Flutter Paketlerini Yukle
         script: |
+          # Proje bağımlılıklarını (Hive, WebView vb.) indirir
           flutter pub get
       - name: iOS Yapilandirma Dosyalarini Olustur (Kritik Adim)
         script: |
-          # Windows'ta oluşmayan dosyaları sunucuda yoktan var eder
-          flutter build ios --config-only
+          # --no-codesign ile sertifika hatasını atlayıp podhelper.rb dosyasını oluşturur
+          flutter build ios --config-only --no-codesign
       - name: CocoaPods Kurulumu (Temiz Build)
         script: |
           cd ios
-          # Hatalı bağlantıları temizleyip modern Swift ayarlarını kurar
+          # Windows'tan gelen hatalı bağları temizleyip iOS kütüphanelerini sıfırdan kurar
           rm -rf Podfile.lock Pods
+          pod deintegrate
           pod install --repo-update
           cd ..
       - name: iOS IPA Build
         script: |
-          # Release modunda derleme yaparak performansı artırıp crash riskini bitirir
+          # Uygulamayı release modunda derleyerek çökme riskini bitirir ve imzalamayı yapar
           flutter build ipa --release --export-options-plist /Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
