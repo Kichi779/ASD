@@ -26,17 +26,17 @@ workflows:
           pod deintegrate
           pod install --repo-update
           cd ..
-      - name: Apple Sertifikalarini Zorla Yapilandir
+      - name: Apple Sertifikalarini Yapilandir
         script: |
-          # HATANIN ÇÖZÜMÜ: Bundle ID ve export metodunu açıkça belirtiyoruz
-          xcode-project use-profiles --bundle-id com.alevivakfi.uade --export-method app-store
+          # HATANIN ÇÖZÜMÜ: --export-method yerine --export-type kullanıyoruz
+          xcode-project use-profiles --bundle-id "com.alevivakfi.uade" --export-type "app-store"
       - name: IPA Paketleme ve Imzalama
         script: |
-          # IPA'yı belirtilen Bundle ID ile paketliyoruz
+          # IPA'yı doğru Bundle ID ile paketliyoruz
           xcode-project build-ipa \
             --workspace ios/Runner.xcworkspace \
             --scheme Runner \
-            --bundle-id com.alevivakfi.uade
+            --bundle-id "com.alevivakfi.uade"
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
