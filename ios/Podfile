@@ -1,13 +1,12 @@
-# 1. Flutter'ın pod yardımcı dosyasını içeri aktarıyoruz (Hatanın çözümü burada)
+# ios/Podfile
 load File.join(File.dirname(File.realpath(__FILE__)), 'Flutter', 'podhelper.rb')
 
-platform :ios, '14.0' # Sürümü 14'e sabitledik
+platform :ios, '14.0'
 
 target 'Runner' do
-  use_frameworks! # Swift eklentileri (Hive/Path Provider) için zorunlu
+  use_frameworks!
   use_modular_headers!
 
-  # 2. Artık Ruby bu komutu tanıyacak
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
@@ -15,7 +14,6 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
-      # Gereksiz derleme hatalarını önlemek için ayarlar
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
       config.build_settings['ENABLE_BITCODE'] = 'NO'
     end
