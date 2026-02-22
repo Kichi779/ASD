@@ -3,8 +3,6 @@ workflows:
     name: Uluslararasi Alevi Vakfi iOS Build
     instance_type: mac_mini_m1
     max_build_duration: 60
-    integrations:
-      app_store_connect: alevi-vakfi 
     environment:
       flutter: stable
       xcode: latest
@@ -13,30 +11,21 @@ workflows:
       - name: Flutter Paketlerini Yukle
         script: |
           flutter pub get
-      - name: iOS Yapilandirma Dosyalarini Olustur (Hileli Adim)
+      - name: iOS Yapilandirma Dosyalarini Olustur (Kritik Adim)
         script: |
-          # Podfile'ı gizleyip podhelper.rb dosyasını sunucuda oluşturur
-          mv ios/Podfile ios/Podfile.bak || true
-          flutter build ios --config-only --no-codesign
-          mv ios/Podfile.bak ios/Podfile || true
-      - name: CocoaPods Kurulumu (Gerçek Kurulum)
+          # Bu komut, sunucuda hata veren 'podhelper.rb' dosyasini yoktan var eder
+          flutter build ios --config-only
+      - name: CocoaPods Kurulumu (Temiz Build)
         script: |
           cd ios
+          # Windows'tan gelen hatali dosyalari temizliyoruz
           rm -rf Podfile.lock Pods
-          pod deintegrate
           pod install --repo-update
           cd ..
-      - name: Apple Sertifikalarini Yapilandir
+      - name: iOS IPA Build
         script: |
-          # HATANIN ÇÖZÜMÜ: --export-method yerine --export-type kullanıyoruz
-          xcode-project use-profiles --bundle-id "com.alevivakfi.uade" --export-type "app-store"
-      - name: IPA Paketleme ve Imzalama
-        script: |
-          # IPA'yı doğru Bundle ID ile paketliyoruz
-          xcode-project build-ipa \
-            --workspace ios/Runner.xcworkspace \
-            --scheme Runner \
-            --bundle-id "com.alevivakfi.uade"
+          # Uygulamayi release modunda derleyip çökme riskini bitiriyoruz
+          flutter build ipa --release --export-options-plist /Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
