@@ -1,4 +1,4 @@
-name: uluslararasialevivakfi
+name: uluslararasi_alevi_vakfi
 description: "Uluslararası Alevi Vakfı mobil uygulaması"
 publish_to: 'none'
 
@@ -15,6 +15,7 @@ dependencies:
   # Hive: Saf Dart olduğu için iOS tarafında çökme yapmaz
   hive: ^2.2.3
   hive_flutter: ^1.1.0
+
 
   webview_flutter: ^4.9.0
   url_launcher: ^6.3.1

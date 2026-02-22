@@ -1,13 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 
+    <!-- App Identity -->
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
 
+    <!-- 📱 Telefonda görünen isim (App Store ile uyumlu) -->
     <key>CFBundleDisplayName</key>
     <string>Uluslararası Alevi Vakfı</string>
+
+    <!-- Sistemsel isim (teknik, kullanıcı görmez) -->
+    <key>CFBundleName</key>
+    <string>alevi_vakfi</string>
 
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
@@ -17,9 +24,6 @@
 
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
-
-    <key>CFBundleName</key>
-    <string>alevi_vakfi</string>
 
     <key>CFBundlePackageType</key>
     <string>APPL</string>
@@ -33,7 +37,7 @@
     <key>LSRequiresIPhoneOS</key>
     <true/>
 
-    <!-- URL Launcher schemes -->
+    <!-- URL Launcher (sosyal medya vs.) -->
     <key>LSApplicationQueriesSchemes</key>
     <array>
         <string>http</string>
@@ -45,27 +49,16 @@
         <string>x</string>
     </array>
 
-    <!-- WebView / Network -->
+    <!-- 🌐 WebView Network Ayarları -->
     <key>NSAppTransportSecurity</key>
     <dict>
-        <key>NSAllowsArbitraryLoads</key>
-        <true/>
         <key>NSAllowsArbitraryLoadsInWebContent</key>
         <true/>
     </dict>
 
-    <!-- 🔥 ZORUNLU PERMISSIONS (CRASH ÖNLEYİCİ) -->
-    <key>NSCameraUsageDescription</key>
-    <string>Kamera erişimi gereklidir.</string>
-
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Mikrofon erişimi gereklidir.</string>
-
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>Fotoğraf galerisinden dosya seçimi için gereklidir.</string>
-
-    <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>Fotoğraf kaydetmek için izin gereklidir.</string>
+    <!-- 🔐 GEREKSİZ İZİNLER KALDIRILDI -->
+    <!-- Kamera, mikrofon, galeri KULLANMIYORSAN
+         bunları koymak Apple için risklidir -->
 
     <!-- UI -->
     <key>UILaunchStoryboardName</key>
@@ -74,21 +67,20 @@
     <key>UIMainStoryboardFile</key>
     <string>Main</string>
 
+    <!-- Orientation -->
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
 
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
-        <string>UIInterfaceOrientationPortraitUpsideDown</string>
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
 
+    <!-- Performance -->
     <key>CADisableMinimumFrameDurationOnPhone</key>
     <true/>
 
