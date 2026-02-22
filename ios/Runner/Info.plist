@@ -8,11 +8,11 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
 
-    <!-- 📱 Telefonda görünen isim (App Store ile uyumlu) -->
+    <!-- Telefonda görünen isim -->
     <key>CFBundleDisplayName</key>
     <string>Uluslararası Alevi Vakfı</string>
 
-    <!-- Sistemsel isim (teknik, kullanıcı görmez) -->
+    <!-- Sistemsel teknik isim -->
     <key>CFBundleName</key>
     <string>alevi_vakfi</string>
 
@@ -37,7 +37,7 @@
     <key>LSRequiresIPhoneOS</key>
     <true/>
 
-    <!-- URL Launcher (sosyal medya vs.) -->
+    <!-- URL Schemes -->
     <key>LSApplicationQueriesSchemes</key>
     <array>
         <string>http</string>
@@ -49,16 +49,12 @@
         <string>x</string>
     </array>
 
-    <!-- 🌐 WebView Network Ayarları -->
+    <!-- Network / WebView -->
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsArbitraryLoadsInWebContent</key>
         <true/>
     </dict>
-
-    <!-- 🔐 GEREKSİZ İZİNLER KALDIRILDI -->
-    <!-- Kamera, mikrofon, galeri KULLANMIYORSAN
-         bunları koymak Apple için risklidir -->
 
     <!-- UI -->
     <key>UILaunchStoryboardName</key>
@@ -67,15 +63,17 @@
     <key>UIMainStoryboardFile</key>
     <string>Main</string>
 
-    <!-- Orientation -->
+    <!-- iPhone Orientation (sadece portrait) -->
     <key>UISupportedInterfaceOrientations</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
     </array>
 
+    <!-- iPad Orientation (App Store ZORUNLU) -->
     <key>UISupportedInterfaceOrientations~ipad</key>
     <array>
         <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
