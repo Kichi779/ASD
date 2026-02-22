@@ -1,4 +1,3 @@
-import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -10,6 +9,8 @@ void main() async {
   await Hive.openBox('settings');
   runApp(const MyApp());
 }
+
+/* ---------------- APP ROOT ---------------- */
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -49,6 +50,7 @@ class _MainShellState extends State<MainShell> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: index,
         onTap: (i) => setState(() => index = i),
+        type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Ana Sayfa"),
           BottomNavigationBarItem(icon: Icon(Icons.campaign), label: "Duyurular"),
@@ -70,34 +72,52 @@ class WebHomePage extends StatefulWidget {
 }
 
 class _WebHomePageState extends State<WebHomePage> {
-  late WebViewController controller;
+  late final WebViewController _controller;
   bool loading = true;
-  bool dark = Hive.box('settings').get('dark', defaultValue: false);
 
   static const homeUrl = "https://www.alevi-vakfi.com/";
 
   @override
   void initState() {
     super.initState();
-    controller = WebViewController()
+
+    _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..clearCache()
+      ..setBackgroundColor(const Color(0xFFFFFFFF))
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (_) {
+          onNavigationRequest: (request) {
+            final uri = Uri.parse(request.url);
+
+            // 🔗 External linkleri Safari’ye gönder (crash önler)
+            if (!uri.host.contains("alevi-vakfi.com")) {
+              launchUrl(uri, mode: LaunchMode.externalApplication);
+              return NavigationDecision.prevent;
+            }
+
+            return NavigationDecision.navigate;
+          },
+          onPageFinished: (_) async {
+            if (!mounted) return;
             setState(() => loading = false);
-            _injectTheme();
+            await _injectDarkModeIfNeeded();
           },
         ),
-      )
-      ..loadRequest(Uri.parse(homeUrl));
+      );
+
+    // iOS güvenli başlatma
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controller.loadRequest(Uri.parse(homeUrl));
+    });
   }
 
-  void _injectTheme() {
+  Future<void> _injectDarkModeIfNeeded() async {
+    final dark = Hive.box('settings').get('dark', defaultValue: false);
     if (!dark) return;
-    controller.runJavaScript("""
-      document.body.style.background='#121212';
-      document.body.style.color='#ffffff';
+
+    await _controller.runJavaScript("""
+      document.body.style.backgroundColor = '#121212';
+      document.body.style.color = '#ffffff';
     """);
   }
 
@@ -105,7 +125,7 @@ class _WebHomePageState extends State<WebHomePage> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        WebViewWidget(controller: controller),
+        WebViewWidget(controller: _controller),
         if (loading)
           const Center(child: CircularProgressIndicator()),
       ],
@@ -126,9 +146,9 @@ class AnnouncementsPage extends StatelessWidget {
         padding: EdgeInsets.all(16),
         child: Text(
           "Bu bölüm uygulamaya özel native içeriktir.\n\n"
-              "• Vakıf duyuruları\n"
-              "• Etkinlik bildirimleri\n"
-              "• Resmi açıklamalar",
+          "• Vakıf duyuruları\n"
+          "• Etkinlik bildirimleri\n"
+          "• Resmi açıklamalar",
           style: TextStyle(fontSize: 16),
         ),
       ),
@@ -149,8 +169,8 @@ class AboutPage extends StatelessWidget {
         padding: EdgeInsets.all(16),
         child: Text(
           "Uluslararası Alevi Vakfı resmi mobil uygulamasıdır.\n\n"
-              "Bu uygulama, vakıf faaliyetleri hakkında bilgi vermek "
-              "ve toplulukla iletişimi güçlendirmek amacıyla geliştirilmiştir.",
+          "Bu uygulama, vakıf faaliyetleri hakkında bilgi vermek "
+          "ve toplulukla iletişimi güçlendirmek amacıyla geliştirilmiştir.",
           style: TextStyle(fontSize: 16),
         ),
       ),
@@ -172,7 +192,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    bool dark = box.get('dark', defaultValue: false);
+    final dark = box.get('dark', defaultValue: false);
 
     return Scaffold(
       appBar: AppBar(title: const Text("Ayarlar")),
