@@ -1,243 +1,328 @@
 import 'dart:developer';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:hive_flutter/hive_flutter.dart'; // Hive eklendi
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
 
 void main() async {
-  // CRASH ENGELLEME: Native bağlayıcılar ve veritabanı başlatılıyor
   WidgetsFlutterBinding.ensureInitialized();
-
   try {
-    await Hive.initFlutter(); // Hive kurulumu
-    await Hive.openBox('settings'); // Ayarlar kutusunu aç
+    await Hive.initFlutter();
+    await Hive.openBox('settings');
   } catch (e) {
-    log("HIVE INITIALIZATION ERROR: $e");
+    log("HIVE ERROR: $e");
   }
-
-  FlutterError.onError = (FlutterErrorDetails details) {
-    log('FLUTTER ERROR', error: details.exception, stackTrace: details.stack);
-  };
-
   runApp(const MyApp());
 }
+
+/* ---------------- UYGULAMA KÖKÜ (TEMA) ---------------- */
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      title: 'Uluslararası Alevi Vakfı',
-      debugShowCheckedModeBanner: false,
-      home: WebViewPage(),
+    final box = Hive.box('settings');
+    return ValueListenableBuilder(
+      valueListenable: box.listenable(),
+      builder: (context, box, widget) {
+        final isDark = box.get('isDarkTheme', defaultValue: false);
+        return MaterialApp(
+          title: 'Uluslararası Alevi Vakfı',
+          debugShowCheckedModeBanner: false,
+          themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
+          theme: ThemeData(
+            primarySwatch: Colors.red,
+            useMaterial3: true,
+            appBarTheme: const AppBarTheme(
+                centerTitle: true,
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white
+            ),
+          ),
+          darkTheme: ThemeData.dark(useMaterial3: true),
+          home: const MainShell(),
+        );
+      },
     );
   }
 }
 
-class WebViewPage extends StatefulWidget {
-  const WebViewPage({super.key});
+/* ---------------- ANA YAPI (NAVİGASYON VE POPUP) ---------------- */
 
+class MainShell extends StatefulWidget {
+  const MainShell({super.key});
   @override
-  State<WebViewPage> createState() => _WebViewPageState();
+  State<MainShell> createState() => _MainShellState();
 }
 
-class _WebViewPageState extends State<WebViewPage> {
-  late final WebViewController controller;
-  bool isDarkTheme = false;
-  bool showSocialButtons = true;
-  bool isLoading = true;
-
-  // Hive kutusuna erişim
-  final Box settingsBox = Hive.box('settings');
-  static const String homeUrl = "https://www.alevi-vakfi.com/";
+class _MainShellState extends State<MainShell> {
+  int _currentIndex = 0;
+  final box = Hive.box('settings');
 
   @override
   void initState() {
     super.initState();
-    _initApp();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkWelcomeDialog());
   }
 
-  Future<void> _initApp() async {
-    _loadTheme(); // Kayıtlı temayı yükle
-    _setupController(); // WebView'ı hazırla
-  }
-
-  void _setupController() {
-    controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (url) {
-            if (mounted) setState(() => isLoading = true);
-          },
-          onPageFinished: (url) async {
-            if (!mounted) return;
-            setState(() => isLoading = false);
-            _injectTheme();
-            await _checkCurrentUrl();
-          },
-          onWebResourceError: (error) {
-            log("WEBVIEW ERROR: ${error.description}");
-          },
+  void _checkWelcomeDialog() {
+    bool hasShown = box.get('welcome_final_v14', defaultValue: false);
+    if (!hasShown) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("Hoş Geldiniz"),
+          content: const Text("Vakfımızın dijital dünyasına hoş geldiniz! Bu uygulama üzerinden güncel duyurularımızı takip edebilir, etkinliklerimizden haberdar olabilir ve web sitemizdeki tüm içeriklere anında ulaşabilirsiniz. Her şey elinizin altında!"),
+          actions: [
+            TextButton(
+              onPressed: () {
+                box.put('welcome_final_v14', true);
+                Navigator.pop(context);
+              },
+              child: const Text("Hemen Başla", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
-      )
-      ..loadRequest(Uri.parse(homeUrl));
-  }
-
-  void _loadTheme() {
-    // Hive üzerinden temayı oku
-    setState(() {
-      isDarkTheme = settingsBox.get('isDarkTheme', defaultValue: false);
-    });
-  }
-
-  void _toggleTheme() {
-    setState(() {
-      isDarkTheme = !isDarkTheme;
-      settingsBox.put('isDarkTheme', isDarkTheme); // Hive'a kaydet
-    });
-    _injectTheme();
-  }
-
-  void _injectTheme() {
-    final String js = isDarkTheme
-        ? """
-        (function() {
-          if (document.getElementById('dark-style')) return;
-          var s = document.createElement('style');
-          s.id = 'dark-style';
-          s.innerHTML = `
-            body { background:#121212 !important; color:#fff !important; }
-            * { color:#fff !important; background:#121212 !important; }
-            a { color:#bb86fc !important; }
-          `;
-          document.head.appendChild(s);
-        })();
-        """
-        : """
-        (function() {
-          var s = document.getElementById('dark-style');
-          if (s) s.remove();
-        })();
-        """;
-    controller.runJavaScript(js).catchError((e) => log("JS Inject Error: $e"));
-  }
-
-  Future<void> _checkCurrentUrl() async {
-    try {
-      final currentUrl = await controller.currentUrl();
-      if (!mounted) return;
-      setState(() {
-        showSocialButtons = currentUrl == null || currentUrl == homeUrl || currentUrl.startsWith(homeUrl);
-      });
-    } catch (e) {
-      log("URL Check Error: $e");
+      );
     }
   }
 
-  Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-    } catch (e) {
-      log("URL Launch Error: $e");
-    }
-  }
+  final pages = [
+    const WebViewPage(),
+    const AnnouncementsPage(),
+    const AboutPage(),
+    const SettingsPage(),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: Stack(
-          children: [
-            WebViewWidget(controller: controller),
-            if (isLoading)
-              const Center(child: CircularProgressIndicator(color: Colors.purple)),
-          ],
-        ),
-      ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: "theme_btn",
-            mini: true,
-            backgroundColor: Colors.white.withOpacity(0.8),
-            child: Icon(isDarkTheme ? Icons.light_mode : Icons.dark_mode),
-            onPressed: _toggleTheme,
-          ),
-          const SizedBox(height: 16),
-          if (showSocialButtons) ...[
-            _SocialButton(
-              heroTag: "fb",
-              color: const Color(0xFF1877F2),
-              icon: Icons.facebook,
-              onTap: () => _openUrl("https://www.facebook.com/alevivakfi"),
-            ),
-            _SocialButton(
-              heroTag: "ig",
-              color: const Color(0xFFE4405F),
-              icon: Icons.camera_alt,
-              onTap: () => _openUrl("https://www.instagram.com/alevitischestiftung/"),
-            ),
-            _SocialButton(
-              heroTag: "yt",
-              color: Colors.red,
-              icon: Icons.play_arrow,
-              onTap: () => _openUrl("https://www.youtube.com/@uadevakfi/videos"),
-            ),
-            _SocialButton(
-              heroTag: "x_btn",
-              color: Colors.black,
-              label: "X",
-              onTap: () => _openUrl("https://x.com/UADEVAKFI"),
-            ),
-            const SizedBox(height: 80),
-          ],
+      body: pages[_currentIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (i) => setState(() => _currentIndex = i),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Colors.red,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.language), label: "Vakıf Web"),
+          BottomNavigationBarItem(icon: Icon(Icons.campaign), label: "Duyurular"),
+          BottomNavigationBarItem(icon: Icon(Icons.info_outline), label: "Hakkımızda"),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: "Ayarlar"),
         ],
       ),
     );
   }
 }
 
-class _SocialButton extends StatelessWidget {
-  final Color color;
-  final IconData? icon;
-  final String? label;
-  final VoidCallback onTap;
-  final String heroTag;
+/* ---------------- WEBVIEW (GELİŞMİŞ ANTİ-CHROME FIX) ---------------- */
 
-  const _SocialButton({
-    required this.color,
-    this.icon,
-    this.label,
-    required this.onTap,
-    required this.heroTag,
-  });
+class WebViewPage extends StatefulWidget {
+  const WebViewPage({super.key});
+  @override
+  State<WebViewPage> createState() => _WebViewPageState();
+}
+
+class _WebViewPageState extends State<WebViewPage> {
+  late final WebViewController controller;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+    // 🔥 Masaüstü kimliği ile haritanın "App Intent" (Chrome'u açma) tetiklemesini durduruyoruz.
+      ..setUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 UADE_MOBILE_APP")
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) {
+            setState(() => isLoading = true);
+            _preCleanMaps(); // Sayfa render edilmeden haritayı gizle
+          },
+          onPageFinished: (_) {
+            setState(() => isLoading = false);
+            _applyStyles();
+          },
+          onNavigationRequest: (req) {
+            final url = req.url.toLowerCase();
+            // Google Maps ve Chrome tetikleyicilerini daha gitmeden ENGELLER.
+            if (url.contains("maps.google") || url.contains("googleusercontent.com") || url.contains("gstatic.com")) {
+              return NavigationDecision.prevent;
+            }
+            // Sitemiz dışındaki her şeyi dışarıda aç.
+            if (!url.contains("alevi-vakfi.com")) {
+              launchUrl(Uri.parse(req.url), mode: LaunchMode.externalApplication);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse("https://www.alevi-vakfi.com/"));
+  }
+
+  void _preCleanMaps() {
+    controller.runJavaScript("""
+      var s = document.createElement('style');
+      s.innerHTML = 'iframe[src*="maps"], .google-maps, #map, [id*="map"], .gm-err-container { display: none !important; visibility: hidden !important; height: 0 !important; }';
+      document.head.appendChild(s);
+    """);
+  }
+
+  void _applyStyles() {
+    final isDark = Hive.box('settings').get('isDarkTheme', defaultValue: false);
+    if (isDark) {
+      controller.runJavaScript("document.body.style.background = '#121212'; document.body.style.color = 'white';");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: FloatingActionButton(
-        heroTag: heroTag,
-        mini: true,
-        backgroundColor: color,
-        onPressed: onTap,
-        child: icon != null
-            ? Icon(icon, color: Colors.white)
-            : Text(
-          label ?? '',
-          style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold
-          ),
+    return Scaffold(
+      appBar: AppBar(title: const Text("UADE VAKFI"), actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () => controller.reload())]),
+      body: Stack(children: [WebViewWidget(controller: controller), if (isLoading) const Center(child: CircularProgressIndicator(color: Colors.red))]),
+    );
+  }
+}
+
+/* ---------------- DUYURULAR (WORDPRESS API İLE CANLI ÇEKİM) ---------------- */
+
+class AnnouncementsPage extends StatefulWidget {
+  const AnnouncementsPage({super.key});
+  @override
+  State<AnnouncementsPage> createState() => _AnnouncementsPageState();
+}
+
+class _AnnouncementsPageState extends State<AnnouncementsPage> {
+  // WordPress'teki son 15 haberi çeker
+  Future<List<dynamic>> fetchPosts() async {
+    final response = await http.get(Uri.parse('https://www.alevi-vakfi.com/wp-json/wp/v2/posts?per_page=15&_embed'));
+    if (response.statusCode == 200) return json.decode(response.body);
+    throw Exception('Veri çekilemedi');
+  }
+
+  // HTML kodlarını metne dönüştürür
+  String parseHtml(String? html) {
+    if (html == null) return "";
+    return html
+        .replaceAll(RegExp(r'<[^>]*>|&[^;]+;'), '')
+        .replaceAll('&#8211;', '-')
+        .replaceAll('&#8217;', "'")
+        .replaceAll('&nbsp;', ' ')
+        .trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Canlı Duyurular")),
+      body: FutureBuilder<List<dynamic>>(
+        future: fetchPosts(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.red));
+          if (snapshot.hasError) return Center(child: Text("Haberler yüklenemedi: ${snapshot.error}"));
+
+          return RefreshIndicator(
+            onRefresh: () async => setState(() {}),
+            child: ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: snapshot.data!.length,
+              itemBuilder: (context, i) {
+                final post = snapshot.data![i];
+                return Card(
+                  elevation: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(16),
+                    leading: const CircleAvatar(backgroundColor: Colors.red, child: Icon(Icons.newspaper, color: Colors.white)),
+                    title: Text(parseHtml(post['title']['rendered']), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(parseHtml(post['excerpt']['rendered']), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    onTap: () => launchUrl(Uri.parse(post['link']), mode: LaunchMode.externalApplication),
+                  ),
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/* ---------------- HAKKIMIZDA (NATIVE) ---------------- */
+
+class AboutPage extends StatelessWidget {
+  const AboutPage({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text("Vakfımız")),
+      body: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.volunteer_activism, size: 80, color: Colors.red),
+            SizedBox(height: 20),
+            Text("Uluslararası Alevi Vakfı", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            Padding(
+              padding: EdgeInsets.all(30),
+              child: Text("Vakfımız, inancımızı ve kültürümüzü koruyarak gelecek nesillere aktarmayı ilke edinmiştir.", textAlign: TextAlign.center),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+/* ---------------- AYARLAR VE SOSYAL MEDYA ---------------- */
+
+class SettingsPage extends StatelessWidget {
+  const SettingsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final box = Hive.box('settings');
+    return Scaffold(
+      appBar: AppBar(title: const Text("Ayarlar")),
+      body: ListView(
+        children: [
+          ValueListenableBuilder(
+            valueListenable: box.listenable(),
+            builder: (context, box, widget) {
+              final isDark = box.get('isDarkTheme', defaultValue: false);
+              return SwitchListTile(
+                secondary: Icon(isDark ? Icons.dark_mode : Icons.light_mode),
+                title: const Text("Koyu Tema"),
+                value: isDark,
+                onChanged: (v) => box.put('isDarkTheme', v),
+              );
+            },
+          ),
+          const Divider(),
+          const Padding(padding: EdgeInsets.all(16), child: Text("Sosyal Medya", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey))),
+          _social(Icons.camera_alt, "Instagram", "https://www.instagram.com/alevitischestiftung/"),
+          _social(Icons.facebook, "Facebook", "https://www.facebook.com/alevivakfi/"),
+          _social(Icons.play_circle_fill, "YouTube", "https://www.youtube.com/@uadevakfi/videos"),
+          _social(Icons.alternate_email, "X (Twitter)", "https://x.com/UADEVAKFI"),
+          const Divider(),
+          const Center(child: Padding(padding: EdgeInsets.all(30), child: Text("v1.0.16"))),
+        ],
+      ),
+    );
+  }
+
+  Widget _social(IconData icon, String title, String url) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.red),
+      title: Text(title),
+      onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
     );
   }
 }
